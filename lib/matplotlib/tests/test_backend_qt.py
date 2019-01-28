@@ -143,10 +143,11 @@ def test_fig_sigint(qt_module):
             return ln,
 
     ani = FuncAnimation(fig, update, frames=range(0, 100),
-                        init_func=init, blit=True, interval=50)
-    plt.show(block=True)
-
-    assert True  # just testing that we get here after sigint
+                        init_func=init, blit=True, interval=1)
+    try:
+        plt.show(block=True)
+    except KeyboardInterrupt as e:
+        assert True
 
 
 @pytest.mark.backend('Qt5Agg')

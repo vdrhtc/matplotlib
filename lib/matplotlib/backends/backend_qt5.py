@@ -7,7 +7,7 @@ import traceback
 
 import matplotlib
 
-from matplotlib import backend_tools, cbook
+from matplotlib import backend_tools, cbook, pyplot
 from matplotlib._pylab_helpers import Gcf
 from matplotlib.backend_bases import (
     _Backend, FigureCanvasBase, FigureManagerBase, NavigationToolbar2,
@@ -1117,6 +1117,7 @@ class _BackendQT5(_Backend):
     required_interactive_framework = "qt5"
     FigureCanvas = FigureCanvasQT
     FigureManager = FigureManagerQT
+    interrupted = False
 
     @staticmethod
     def trigger_manager_draw(manager):
@@ -1124,8 +1125,8 @@ class _BackendQT5(_Backend):
 
     @staticmethod
     def interrupt_handler(*args):
-        for manager in Gcf.get_all_fig_managers():
-            manager.destroy()
+        pyplot.close()
+        _BackendQT5.interrupted = True
 
     @staticmethod
     def mainloop():
@@ -1143,3 +1144,6 @@ class _BackendQT5(_Backend):
         finally:
             # reset the SIGINT exception handler
             signal.signal(signal.SIGINT, old_signal)
+            if _BackendQT5.interrupted:
+                _BackendQT5.interrupted = False
+                raise KeyboardInterrupt
