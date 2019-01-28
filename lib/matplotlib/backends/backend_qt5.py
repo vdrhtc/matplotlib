@@ -15,9 +15,10 @@ import matplotlib.backends.qt_editor.figureoptions as figureoptions
 from matplotlib.backends.qt_editor._formsubplottool import UiSubplotTool
 from . import qt_compat
 from .qt_compat import (
-    QtCore, QtGui, QtWidgets, __version__, QT_API,
-    _devicePixelRatioF, _isdeleted, _setDevicePixelRatio,
+    QtCore, QtGui, QtWidgets, __version__, QT_API, _devicePixelRatioF,
+    _isdeleted, _setDevicePixelRatio, _allow_interrupt
 )
+
 
 backend_version = __version__
 
@@ -433,7 +434,13 @@ class FigureCanvasQT(QtWidgets.QWidget, FigureCanvasBase):
         if timeout > 0:
             timer = QtCore.QTimer.singleShot(int(timeout * 1000),
                                              event_loop.quit)
-        event_loop.exec_()
+
+        old_sigint_handler = signal.getsignal(signal.SIGINT)
+        try:
+            with _allow_interrupt(qApp, old_sigint_handler):
+                event_loop.exec_()
+        except ValueError:
+            event_loop.exec_()
 
     def stop_event_loop(self, event=None):
         # docstring inherited
@@ -1025,14 +1032,9 @@ class _BackendQT5(_Backend):
 
     @staticmethod
     def mainloop():
-        old_signal = signal.getsignal(signal.SIGINT)
-        # allow SIGINT exceptions to close the plot window.
-        is_python_signal_handler = old_signal is not None
-        if is_python_signal_handler:
-            signal.signal(signal.SIGINT, signal.SIG_DFL)
+        old_sigint_handler = signal.getsignal(signal.SIGINT)
         try:
+            with _allow_interrupt(qApp, old_sigint_handler):
+                qApp.exec_()
+        except ValueError:
             qApp.exec_()
-        finally:
-            # reset the SIGINT exception handler
-            if is_python_signal_handler:
-                signal.signal(signal.SIGINT, old_signal)

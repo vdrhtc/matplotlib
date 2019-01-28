@@ -16,6 +16,8 @@ Support for PyQt4 is deprecated.
 from distutils.version import LooseVersion
 import os
 import sys
+import signal
+import socket
 
 import matplotlib as mpl
 from matplotlib import _api
@@ -69,11 +71,11 @@ else:
 
 
 def _setup_pyqt5():
-    global QtCore, QtGui, QtWidgets, __version__, is_pyqt5, \
+    global QtCore, QtGui, QtWidgets, QtNetwork, __version__, is_pyqt5, \
         _isdeleted, _getSaveFileName
 
     if QT_API == QT_API_PYQT5:
-        from PyQt5 import QtCore, QtGui, QtWidgets
+        from PyQt5 import QtCore, QtGui, QtWidgets, QtNetwork
         import sip
         __version__ = QtCore.PYQT_VERSION_STR
         QtCore.Signal = QtCore.pyqtSignal
@@ -81,7 +83,7 @@ def _setup_pyqt5():
         QtCore.Property = QtCore.pyqtProperty
         _isdeleted = sip.isdeleted
     elif QT_API == QT_API_PYSIDE2:
-        from PySide2 import QtCore, QtGui, QtWidgets, __version__
+        from PySide2 import QtCore, QtGui, QtWidgets, QtNetwork, __version__
         import shiboken2
         def _isdeleted(obj): return not shiboken2.isValid(obj)
     else:
@@ -94,11 +96,11 @@ def _setup_pyqt5():
 
 
 def _setup_pyqt4():
-    global QtCore, QtGui, QtWidgets, __version__, is_pyqt5, \
+    global QtCore, QtGui, QtWidgets, QtNetwork, __version__, is_pyqt5, \
         _isdeleted, _getSaveFileName
 
     def _setup_pyqt4_internal(api):
-        global QtCore, QtGui, QtWidgets, \
+        global QtCore, QtGui, QtWidgets, QtNetwork, \
             __version__, is_pyqt5, _isdeleted, _getSaveFileName
         # List of incompatible APIs:
         # http://pyqt.sourceforge.net/Docs/PyQt4/incompatible_apis.html
@@ -114,7 +116,7 @@ def _setup_pyqt4():
                     sip.setapi(_sip_api, api)
                 except ValueError:
                     pass
-        from PyQt4 import QtCore, QtGui
+        from PyQt4 import QtCore, QtGui, QtNetwork
         import sip  # Always succeeds *after* importing PyQt4.
         __version__ = QtCore.PYQT_VERSION_STR
         # PyQt 4.6 introduced getSaveFileNameAndFilter:
@@ -130,7 +132,9 @@ def _setup_pyqt4():
     if QT_API == QT_API_PYQTv2:
         _setup_pyqt4_internal(api=2)
     elif QT_API == QT_API_PYSIDE:
-        from PySide import QtCore, QtGui, __version__, __version_info__
+        from PySide import (
+            QtCore, QtGui, QtNetwork, __version__, __version_info__
+        )
         import shiboken
         # PySide 1.0.3 fixed the following:
         # https://srinikom.github.io/pyside-bz-archive/809.html
@@ -216,3 +220,49 @@ def _setDevicePixelRatio(obj, val):
     if hasattr(obj, 'setDevicePixelRatio'):
         # Not available on Qt4 or some older Qt5.
         obj.setDevicePixelRatio(val)
+
+
+class _allow_interrupt:
+    def __init__(self, qApp, old_sigint_handler):
+        self.interrupted_qobject = qApp
+        self.old_fd = None
+        if old_sigint_handler in (None, signal.SIG_IGN, signal.SIG_DFL):
+            raise ValueError(f"Old SIGINT handler {old_sigint_handler}"
+                             f" will not be overridden")
+        self.old_sigint_handler = old_sigint_handler
+        self.caught_args = None
+
+        QAS = QtNetwork.QAbstractSocket
+        self.qt_socket = QAS(QAS.TcpSocket, qApp)
+        # Create a socket pair
+        self.wsock, self.rsock = socket.socketpair()
+        # Let Qt listen on the one end
+        self.qt_socket.setSocketDescriptor(self.rsock.fileno())
+        self.wsock.setblocking(False)
+        self.qt_socket.readyRead.connect(self._readSignal)
+
+    def __enter__(self):
+        signal.signal(signal.SIGINT, self._handle)
+        # And let Python write on the other end
+        self.old_fd = signal.set_wakeup_fd(self.wsock.fileno())
+
+    def __exit__(self, type, val, traceback):
+        signal.set_wakeup_fd(self.old_fd)
+        signal.signal(signal.SIGINT, self.old_sigint_handler)
+
+        self.wsock.close()
+        self.rsock.close()
+        self.qt_socket.abort()
+        if self.caught_args is not None:
+            self.old_sigint_handler(*self.caught_args)
+
+    def _readSignal(self):
+        # Read the written byte.
+        # Note: readyRead is blocked from
+        # occurring again until readData() was called, so call it,
+        # even if you don't need the value.
+        self.qt_socket.readData(1)
+
+    def _handle(self, *args):
+        self.caught_args = args
+        self.interrupted_qobject.quit()
