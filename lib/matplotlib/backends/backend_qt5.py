@@ -1123,12 +1123,22 @@ class _BackendQT5(_Backend):
         manager.canvas.draw_idle()
 
     @staticmethod
+    def interrupt_handler(*args):
+        for manager in Gcf.get_all_fig_managers():
+            manager.destroy()
+
+    @staticmethod
     def mainloop():
         old_signal = signal.getsignal(signal.SIGINT)
         # allow SIGINT exceptions to close the plot window.
-        signal.signal(signal.SIGINT, signal.SIG_DFL)
+        signal.signal(signal.SIGINT, _BackendQT5.interrupt_handler)
+        timer = QtCore.QTimer()
+        timer.start(500)  # every 0.5s we are able to catch a SIG_INT in the interpreter and it then will be handled by _BackendQT5.interrupt_handler
+        timer.timeout.connect(lambda: None)
+
         try:
             qApp.exec_()
         finally:
             # reset the SIGINT exception handler
             signal.signal(signal.SIGINT, old_signal)
+

@@ -1,5 +1,8 @@
 import copy
+import os
 from unittest import mock
+
+from matplotlib.animation import FuncAnimation
 
 import matplotlib
 from matplotlib import pyplot as plt
@@ -113,6 +116,36 @@ def test_fig_close(backend):
     # that got added by plt.figure()
     assert init_figs == Gcf.figs
 
+@pytest.mark.backend('Qt5Agg')
+def test_fig_sigint(qt_module):
+    import signal
+    plt.ion()
+    fig, ax = plt.subplots()
+    xdata, ydata = [], []
+    ln, = plt.plot([], [], 'ro')
+
+    def init():
+        ax.set_xlim(0, 100)
+        ax.set_ylim(0, 100)
+        return ln,
+
+    def update(frame):
+        if frame < 50:
+            xdata.append(frame)
+            ydata.append(frame)
+            ln.set_data(xdata, ydata)
+            return ln,
+        else:
+            # print(signal.getsignal(signal.SIGINT))
+            os.kill(os.getpid(), signal.SIGINT)
+            print("Simulated interrupt")
+            return ln,
+
+    ani = FuncAnimation(fig, update, frames=range(0, 100),
+                        init_func=init, blit=True, interval=50)
+    plt.show(block=True)
+
+    assert True # just testing that we get here after sigint
 
 @pytest.mark.backend('Qt5Agg')
 def test_fig_signals(qt_module):
@@ -147,12 +180,12 @@ def test_fig_signals(qt_module):
 
     signal.signal(signal.SIGINT, CustomHandler)
 
-    # mainloop() sets SIGINT, starts Qt event loop (which trigers timer and
+    # mainloop() sets SIGINT, starts Qt event loop (which triggers timer and
     # exits) and then mainloop() resets SIGINT
     matplotlib.backends.backend_qt5._BackendQT5.mainloop()
 
     # Assert: signal handler during loop execution is signal.SIG_DFL
-    assert event_loop_signal == signal.SIG_DFL
+    assert event_loop_signal == matplotlib.backends.backend_qt5._BackendQT5.interrupt_handler
 
     # Assert: current signal handler is the same as the one we set before
     assert CustomHandler == signal.getsignal(signal.SIGINT)
