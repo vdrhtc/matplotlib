@@ -116,6 +116,7 @@ def test_fig_close(backend):
     # that got added by plt.figure()
     assert init_figs == Gcf.figs
 
+
 @pytest.mark.backend('Qt5Agg')
 def test_fig_sigint(qt_module):
     import signal
@@ -145,10 +146,12 @@ def test_fig_sigint(qt_module):
                         init_func=init, blit=True, interval=50)
     plt.show(block=True)
 
-    assert True # just testing that we get here after sigint
+    assert True  # just testing that we get here after sigint
+
 
 @pytest.mark.backend('Qt5Agg')
 def test_fig_signals(qt_module):
+    from matplotlib.backends.backend_qt5 import _BackendQT5
     # Create a figure
     fig = plt.figure()
 
@@ -182,10 +185,10 @@ def test_fig_signals(qt_module):
 
     # mainloop() sets SIGINT, starts Qt event loop (which triggers timer and
     # exits) and then mainloop() resets SIGINT
-    matplotlib.backends.backend_qt5._BackendQT5.mainloop()
+    _BackendQT5.mainloop()
 
     # Assert: signal handler during loop execution is signal.SIG_DFL
-    assert event_loop_signal == matplotlib.backends.backend_qt5._BackendQT5.interrupt_handler
+    assert event_loop_signal == _BackendQT5.interrupt_handler
 
     # Assert: current signal handler is the same as the one we set before
     assert CustomHandler == signal.getsignal(signal.SIGINT)
