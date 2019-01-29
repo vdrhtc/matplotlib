@@ -139,7 +139,7 @@ def test_fig_sigint(qt_module):
         else:
             # print(signal.getsignal(signal.SIGINT))
             os.kill(os.getpid(), signal.SIGINT)
-            print("Simulated interrupt")
+            # print("Simulated interrupt")
             return ln,
 
     ani = FuncAnimation(fig, update, frames=range(0, 100),
@@ -148,6 +148,9 @@ def test_fig_sigint(qt_module):
         plt.show(block=True)
     except KeyboardInterrupt as e:
         assert True
+        return
+
+    assert False
 
 
 @pytest.mark.backend('Qt5Agg')
@@ -188,11 +191,12 @@ def test_fig_signals(qt_module):
     # exits) and then mainloop() resets SIGINT
     _BackendQT5.mainloop()
 
-    # Assert: signal handler during loop execution is signal.SIG_DFL
-    assert event_loop_signal == _BackendQT5.interrupt_handler
+    # Assert: signal handler during loop execution is changed
+    # (can't test equality with func)
+    assert event_loop_signal != CustomHandler
 
     # Assert: current signal handler is the same as the one we set before
-    assert CustomHandler == signal.getsignal(signal.SIGINT)
+    assert signal.getsignal(signal.SIGINT) == CustomHandler
 
     # Reset SIGINT handler to what it was before the test
     signal.signal(signal.SIGINT, original_signal)
