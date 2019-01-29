@@ -478,7 +478,24 @@ class FigureCanvasQT(QtWidgets.QWidget, FigureCanvasBase):
         self._event_loop = event_loop = QtCore.QEventLoop()
         if timeout:
             timer = QtCore.QTimer.singleShot(timeout * 1000, event_loop.quit)
-        event_loop.exec_()
+
+        SIGINTHandler(qApp)
+        interrupted = False
+
+        def sigint_handler():
+            nonlocal interrupted
+            event_loop.quit()
+            interrupted = True
+
+        old_sigint_handler = signal.getsignal(signal.SIGINT)
+        signal.signal(signal.SIGINT, lambda sig, _: sigint_handler())
+
+        try:
+            event_loop.exec_()
+        finally:
+            signal.signal(signal.SIGINT, old_sigint_handler)
+            if interrupted:
+                raise KeyboardInterrupt
 
     def stop_event_loop(self, event=None):
         if hasattr(self, "_event_loop"):
@@ -1168,12 +1185,13 @@ class _BackendQT5(_Backend):
         SIGINTHandler(qApp)
         interrupted = False
 
-        def interrupt_handler():
+        def sigint_handler():
             pyplot.close()
             nonlocal interrupted
             interrupted = True
+            qApp.quit()
 
-        signal.signal(signal.SIGINT, lambda sig, _: interrupt_handler())
+        signal.signal(signal.SIGINT, lambda sig, _: sigint_handler())
 
         try:
             qApp.exec_()
