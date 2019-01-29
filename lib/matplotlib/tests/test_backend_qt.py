@@ -99,19 +99,30 @@ def qt_mods(request):
     pytest.param('Qt5Agg', marks=pytest.mark.backend('Qt5Agg')),
 ])
 def test_fig_close(backend):
+
+    qt_compat = pytest.importorskip('matplotlib.backends.qt_compat')
+    QtWidgets = qt_compat.QtWidgets
+
     # save the state of Gcf.figs
     init_figs = copy.copy(Gcf.figs)
-
     # make a figure using pyplot interface
     fig = plt.figure()
+    plt.show(block=False)
+
+    # check that Qt window is created
+    assert len(QtWidgets.QApplication.instance().allWindows()) == 1
 
     # simulate user clicking the close button by reaching in
     # and calling close on the underlying Qt object
     fig.canvas.manager.window.close()
+    # ensure that Qt has time to delete the window
+    fig.canvas.start_event_loop(.1)
 
     # assert that we have removed the reference to the FigureManager
     # that got added by plt.figure()
     assert init_figs == Gcf.figs
+    # assert that no windows are left in memory
+    assert QtWidgets.QApplication.instance().allWindows() == []
 
 
 @pytest.mark.backend('Qt5Agg')
@@ -245,6 +256,7 @@ def test_dpi_ratio_change():
         size = qt_canvas.size()
 
         qt_canvas.manager.show()
+        qt_canvas.start_event_loop(1)
         qt_canvas.draw()
         qApp.processEvents()
 

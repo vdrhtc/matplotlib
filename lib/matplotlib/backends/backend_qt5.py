@@ -120,11 +120,7 @@ def _create_qApp():
 
             qApp = QtWidgets.QApplication([b"matplotlib"])
 
-            def last_window_closed_handler():
-                print("Last window closed, quitting")
-                qApp.quit()
-
-            qApp.lastWindowClosed.connect(last_window_closed_handler)
+            qApp.lastWindowClosed.connect(qApp.quit)
         else:
             qApp = app
 
@@ -544,7 +540,6 @@ class MainWindow(QtWidgets.QMainWindow):
     def closeEvent(self, event):
         self.closing.emit()
         QtWidgets.QMainWindow.closeEvent(self, event)
-        # print("Main window caught closing")
 
 class FigureManagerQT(FigureManagerBase):
     """
@@ -671,7 +666,6 @@ class FigureManagerQT(FigureManagerBase):
         self.window.raise_()
 
     def destroy(self, *args):
-        # print("Trying to destroy")
         # check for qApp first, as PySide deletes it in its atexit handler
         if QtWidgets.QApplication.instance() is None:
             return
