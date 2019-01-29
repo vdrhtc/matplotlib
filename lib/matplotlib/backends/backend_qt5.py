@@ -119,7 +119,12 @@ def _create_qApp():
                     raise RuntimeError('Invalid DISPLAY variable')
 
             qApp = QtWidgets.QApplication([b"matplotlib"])
-            qApp.lastWindowClosed.connect(qApp.quit)
+
+            def last_window_closed_handler():
+                print("Last window closed, quitting")
+                qApp.quit()
+
+            qApp.lastWindowClosed.connect(last_window_closed_handler)
         else:
             qApp = app
 
@@ -539,7 +544,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def closeEvent(self, event):
         self.closing.emit()
         QtWidgets.QMainWindow.closeEvent(self, event)
-
+        # print("Main window caught closing")
 
 class FigureManagerQT(FigureManagerBase):
     """
@@ -560,6 +565,7 @@ class FigureManagerQT(FigureManagerBase):
         FigureManagerBase.__init__(self, canvas, num)
         self.canvas = canvas
         self.window = MainWindow()
+        self.window.setAttribute(QtCore.Qt.WA_DeleteOnClose, True)
         self.window.closing.connect(canvas.close_event)
         self.window.closing.connect(self._widgetclosed)
 
@@ -665,6 +671,7 @@ class FigureManagerQT(FigureManagerBase):
         self.window.raise_()
 
     def destroy(self, *args):
+        # print("Trying to destroy")
         # check for qApp first, as PySide deletes it in its atexit handler
         if QtWidgets.QApplication.instance() is None:
             return
