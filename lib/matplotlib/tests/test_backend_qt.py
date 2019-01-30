@@ -286,6 +286,7 @@ def test_dpi_ratio_change():
         size = qt_canvas.size()
 
         qt_canvas.manager.show()
+        plt.pause(0.5)
         qt_canvas.draw()
         qApp.processEvents()
 
